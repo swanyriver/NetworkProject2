@@ -82,8 +82,7 @@ def client_main(TCP_IP, TCP_PORT):
     #todo retieve this from commandline
     dataSocket = getListeningSocket(4444)
     #todo send port num to server
-    s.sendall(socket.gethostbyname_ex(socket.gethostname()))
-    s.sendall("4444")
+    s.send(socket.gethostbyname(socket.gethostname()) + " " + "4444")
 
     dataConnection, address = dataSocket.accept()
     print "connected to ", address
@@ -96,7 +95,8 @@ def client_main(TCP_IP, TCP_PORT):
 
 if __name__ == "__main__":
 
-    if len(sys.argv) < EXPECTED_ARGS:
+    # todo should be at least 4
+    if len(sys.argv) <= EXPECTED_ARGS:
         print "must supply host and port number"
         sys.exit(1)
 

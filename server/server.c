@@ -146,21 +146,22 @@ int getListeningSocket(int portNum) {
 }
 
 void getClientHostNameAndDataPort(int conSock, char** hostName, char** portString, char* readBuffer){
-    ssize_t bytesReadName = recv(conSock, readBuffer, REC_BUFFER_SIZE, 0);
+    ssize_t bytesRead = recv(conSock, readBuffer, REC_BUFFER_SIZE, 0);
 
-    if (bytesReadName == 0){
+    if (bytesRead == 0){
         return;
     }
 
     *hostName = readBuffer;
+    *(readBuffer + bytesRead) = 0;
 
-    ssize_t bytesReadPort = recv(conSock, readBuffer + bytesReadName, (size_t) (REC_BUFFER_SIZE - bytesReadName), 0);
-
-    if (bytesReadPort == 0){
-        return;
+    for(char* cursor = readBuffer; cursor - readBuffer < bytesRead - 1; ++cursor){
+        if (*cursor == ' '){
+            *cursor = 0;
+            *portString = cursor+1;
+            break;
+        }
     }
-
-    *portString = readBuffer+bytesReadName;
 
 
 }
