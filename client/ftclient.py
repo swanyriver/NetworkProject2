@@ -82,7 +82,7 @@ def client_main(TCP_IP, TCP_PORT):
     #todo retieve this from commandline
     dataSocket = getListeningSocket(4444)
     #todo send port num to server
-    s.send(socket.gethostbyname(socket.gethostname()) + " " + "4444")
+    s.send(socket.gethostbyname(socket.gethostname()) + " " + "boogie")
 
     dataConnection, address = dataSocket.accept()
     print "connected to ", address

@@ -230,7 +230,7 @@ int main(int argc, char const *argv[]) {
         return 1;
     }
 
-    printf("data connection: %s%s\n", clientName, dataPortString);
+    printf("data connection: %s %s\n", clientName, dataPortString);
     int dataSocket = getConnectedSocket(clientName, dataPortString);
 
     if (dataSocket == CONNECT_ERROR){
