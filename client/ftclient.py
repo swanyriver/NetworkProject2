@@ -16,6 +16,7 @@ MSG_LIMIT = 500
 MIN_PORT = 0
 PRIVILEGED = 1024
 MAX_PORT = 65536
+EXPECTED_ARGS = 2
 
 
 def client_main(TCP_IP, TCP_PORT):
@@ -28,26 +29,24 @@ def client_main(TCP_IP, TCP_PORT):
     print "peerName:", s.getpeername()
     #s.settimeout(.2)
 
-
-
+    print s.recv(REC_BUFFER)
 
     s.close()
     print "Connection with server closed"
 
 
 if __name__ == "__main__":
-    pass
-    #todo parse command line args then call main
-    # if len(sys.argv) < 2:
-    #     print "must supply host and port number"
-    #     sys.exit(1)
-    #
-    # port = None
-    # try:
-    #     port = int(sys.argv[2])
-    #     if not PRIVILEGED < port < MAX_PORT: raise ValueError("Out of range")
-    # except ValueError:
-    #     print "Invalid port supplied"
-    #     sys.exit(1)
-    #
-    # client_main(sys.argv[1], port)
+
+    if len(sys.argv) < EXPECTED_ARGS:
+        print "must supply host and port number"
+        sys.exit(1)
+
+    port = None
+    try:
+        port = int(sys.argv[2])
+        if not PRIVILEGED < port < MAX_PORT: raise ValueError("Out of range")
+    except ValueError:
+        print "Invalid port supplied"
+        sys.exit(1)
+
+    client_main(sys.argv[1], port)
