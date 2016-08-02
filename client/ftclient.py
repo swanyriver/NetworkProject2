@@ -10,6 +10,7 @@
 
 import sys
 import socket
+from multiprocessing import process
 
 REC_BUFFER = 512
 MSG_LIMIT = 500
@@ -17,6 +18,53 @@ MIN_PORT = 0
 PRIVILEGED = 1024
 MAX_PORT = 65536
 EXPECTED_ARGS = 2
+
+
+def nextPort(portNum):
+    portNum += 1
+    return portNum if PRIVILEGED < portNum <= MAX_PORT else PRIVILEGED
+
+
+def getListeningSocket(portNum):
+    serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # todo port avail and permission check (can be coppied from above pretty easily)
+    while True:
+        try:
+            serverSocket.bind((socket.gethostname(), portNum))
+            # binding to port was successful exit loop
+            break
+        except socket.error as e:
+            # for convenience of testing on flip server with congestion ports, advance consecutively
+            if e.errno == 98 or e.errno == 13:
+                candidate = nextPort(portNum)
+                print "Port # %d is %s"%(portNum, ("unavailable" if e.errno == 98 else "privileged")),
+                response = raw_input("would you like to try %d? (y/n)"%candidate)
+                if response.lower() == "y" or response.lower == "yes":
+                    portNum = candidate
+                else:
+                    print "(SERVER-TERMINATED) due to port unavailability"
+                    exit()
+
+    serverSocket.listen(1)
+    return serverSocket
+
+
+def getDirContents(sock):
+    """
+    :type sock: socket.socket
+    :return:
+    """
+    dataConnection, address = sock.accept()
+    print dataConnection.recv(REC_BUFFER)
+
+
+def getFile(sock):
+    """
+    :type sock: socket.socket
+    :return:
+    """
+    dataConnection, address = sock.accept()
+
 
 
 def client_main(TCP_IP, TCP_PORT):
@@ -31,6 +79,17 @@ def client_main(TCP_IP, TCP_PORT):
 
     print s.recv(REC_BUFFER)
 
+    #todo retieve this from commandline
+    dataSocket = getListeningSocket(4444)
+    #todo send port num to server
+    s.sendall(socket.gethostbyname_ex(socket.gethostname()))
+    s.sendall("4444")
+
+    dataConnection, address = dataSocket.accept()
+    print "connected to ", address
+    print dataConnection.recv(REC_BUFFER)
+
+    dataSocket.close()
     s.close()
     print "Connection with server closed"
 

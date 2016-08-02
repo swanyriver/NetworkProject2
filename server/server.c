@@ -38,6 +38,30 @@ void error_exit(char* message){
     exit(1);
 }
 
+/*int getConnectedDataSocket(struct sockaddr clientAddr, char* portString, char* errorMsg){
+
+    //todo parse portString and set port num here
+
+    struct sockaddr_in *client_in = (struct sockaddr_in *) &clientAddr;
+    client_in->sin_port = htons(4444);
+
+
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s == -1){
+        errorMsg = "could not create socket file-descriptor";
+        return CONNECT_ERROR;
+    }
+
+    // connect socket to client
+    if (connect(s, (const struct sockaddr *) client_in, sizeof client_in->sin_addr) != CONNECT_ERROR){
+        errorMsg = "could not connect to client on second socket for data transfer";
+        close(s);
+        return CONNECT_ERROR;
+    }
+
+    return s;
+}*/
+
 int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     // set up hints struct and other socket initialization referenced from Beej's guide and linux manual examples
     // http://beej.us/guide/bgnet/output/html/multipage/clientserver.html
@@ -89,61 +113,11 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     return s;
 }
 
-/*//precondition serverPort is a string representin a valid non-reserved port number
+//precondition serverPort is a string representin a valid non-reserved port number
 //postcondition, returns file descriptor int of bound and listening socket
-int getListeningSocket(const char* serverPort, struct addrinfo* serverAddr){
-    // set up hints struct and other socket initialization referenced from Beej's guide and linux manual examples
-    // http://beej.us/guide/bgnet/output/html/multipage/clientserver.html
-    // http://man7.org/linux/man-pages/man3/getaddrinfo.3.html
-
-    // set up structs for requesting ip address from hostname
-    struct addrinfo hints, *servinfo;
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-
-    int getadderResult = getaddrinfo(NULL, serverPort, &hints, &servinfo);
-    if (getadderResult != GET_ADDR_NO_ERROR){
-        fprintf(stderr, "getaddrinfo call failed with error: %s\n", gai_strerror(getadderResult));
-        return 0;
-    }
-
-    int s = 0;
-    for (struct addrinfo *rp = servinfo; rp != NULL; rp = rp->ai_next) {
-        // create file descriptor
-        // dprintf(3, "attempting to connect to server on using addrinfo struct at:%p\n", rp);
-        s = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-        if (s == -1){
-            continue;
-        }
-
-        // connect socket to server
-        if (bind(s, rp->ai_addr, rp->ai_addrlen) == BIND_SUCCESS){
-            printf("bound on: %s %s %d\n", rp->ai_canonname,rp->ai_addr->sa_data, s);
-            *serverAddr = *rp;
-            break;
-        }
-        close(s);
-    }
-    // free up memory used by addr-struct-linked-list
-    freeaddrinfo(servinfo);
-
-
-    // ensure that fd is a valid socket, and not a closed socket
-    struct stat statbuf;
-    fstat(s, &statbuf);
-    if (!S_ISSOCK(statbuf.st_mode)){
-        fprintf(stderr, "Unable to bind a socket to supplied port");
-        return 0;
-    }
-
-    listen(s, POOL_SIZE * 2);
-
-
-    return s;
-}*/
-
 int getListeningSocket(int portNum) {
+    // Creating a listening socket taken from my previous classwork
+    // https://github.com/swanyriver/OS-program-4/blob/master/otp_crypt_d.c
     int socketFD;
     struct sockaddr_in serv_addr;
 
@@ -159,7 +133,7 @@ int getListeningSocket(int portNum) {
     bzero((void *) &serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(portNum);
+    serv_addr.sin_port = htons((uint16_t) portNum);
 
     //register socket as passive, with cast to generic socket address
     if (bind(socketFD, (struct sockaddr *) &serv_addr,
@@ -169,6 +143,26 @@ int getListeningSocket(int portNum) {
     listen(socketFD,POOL_SIZE);
 
     return socketFD;
+}
+
+void getClientHostNameAndDataPort(int conSock, char** hostName, char** portString, char* readBuffer){
+    ssize_t bytesReadName = recv(conSock, readBuffer, REC_BUFFER_SIZE, 0);
+
+    if (bytesReadName == 0){
+        return;
+    }
+
+    *hostName = readBuffer;
+
+    ssize_t bytesReadPort = recv(conSock, readBuffer + bytesReadName, (size_t) (REC_BUFFER_SIZE - bytesReadName), 0);
+
+    if (bytesReadPort == 0){
+        return;
+    }
+
+    *portString = readBuffer+bytesReadName;
+
+
 }
 
 
@@ -208,17 +202,55 @@ int main(int argc, char const *argv[]) {
     printf("python ftclient.py %s %s <COMMAND> [<FILENAME>] <DATA_PORT>\n", serverName, serverPortSt);
 
 
-    struct sockaddr_storage clientAddr;
+    //struct sockaddr_storage clientAddrSt;
+    struct sockaddr clientAddr;
     socklen_t addrSize = sizeof clientAddr;
-    int connectedSocket = accept(serverSocket, (struct sockaddr *) &clientAddr, &addrSize);
+    int connectedSocket = accept(serverSocket, &clientAddr, &addrSize);
 
+//    struct sockaddr clientIP;
+//    addrSize = sizeof clientIP;
+//    getpeername(connectedSocket, &clientIP, &addrSize);
+//    printf("server: got connection from %s\n", clientIP.sa_data);
 
+    //struct sockaddr clientAddr = clientAddrSt.ss_family == AF_INET ? (((struct sockaddr_in)clientAddrSt).sin_addr)
+
+    //todo get rid of this
     char* msg = "hello there client";
     send(connectedSocket, msg, strlen(msg), 0);
 
+    //todo get command and dataport from socket
+    char* clientName = 0;
+    char* dataPortString = 0;
+    char* readBuffer = malloc(REC_BUFFER_SIZE);
+    getClientHostNameAndDataPort(connectedSocket, &clientName, &dataPortString, readBuffer);
+
+    if (!clientName || !dataPortString){
+        fprintf(stderr, "%s\n", "error retrieving data port number from client");
+        return 1;
+    }
+
+    printf("data connection: %s%s\n", clientName, dataPortString);
+    int dataSocket = getConnectedSocket(clientName, dataPortString);
+
+    if (dataSocket == CONNECT_ERROR){
+        fprintf(stderr, "failed to create second connection for data\n");
+    } else {
+        printf("connect to client, fd=%d\n", dataSocket);
+        struct sockaddr_in peer;
+        getpeername(dataSocket, (struct sockaddr *) &peer, (socklen_t *) sizeof peer);
+        //printf("%s\n", peer.sin_addr.s_addr);
+    }
+
+    msg = "DATA connection says hello";
+    send(dataSocket, msg, strlen(msg), 0);
+
+
     shutdown(connectedSocket, 2);
     close(connectedSocket);
+    shutdown(dataSocket, 2);
+    close(dataSocket);
     close(serverSocket);
+    free(readBuffer);
 
 }
 
