@@ -89,7 +89,7 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     return s;
 }
 
-//precondition serverPort is a string representin a valid non-reserved port number
+/*//precondition serverPort is a string representin a valid non-reserved port number
 //postcondition, returns file descriptor int of bound and listening socket
 int getListeningSocket(const char* serverPort, struct addrinfo* serverAddr){
     // set up hints struct and other socket initialization referenced from Beej's guide and linux manual examples
@@ -141,6 +141,34 @@ int getListeningSocket(const char* serverPort, struct addrinfo* serverAddr){
 
 
     return s;
+}*/
+
+int getListeningSocket(int portNum) {
+    int socketFD;
+    struct sockaddr_in serv_addr;
+
+    //open and verify socket
+    socketFD = socket(AF_INET, SOCK_STREAM, 0);
+    if(socketFD<0) error_exit("Socket Error: Opening");
+
+    //set ports to be reused
+    int yes=1;
+    setsockopt(socketFD, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+
+    //set up sever addr struct
+    bzero((void *) &serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_port = htons(portNum);
+
+    //register socket as passive, with cast to generic socket address
+    if (bind(socketFD, (struct sockaddr *) &serv_addr,
+             sizeof(serv_addr)) < 0)
+        error_exit("Socket Error: Binding");
+
+    listen(socketFD,POOL_SIZE);
+
+    return socketFD;
 }
 
 
@@ -164,8 +192,7 @@ int main(int argc, char const *argv[]) {
     ///// INVARIANT
     ///// server launched with valid port number
 
-    struct addrinfo serverInfo;
-    int serverSocket = getListeningSocket(serverPortSt, &serverInfo);
+    int serverSocket = getListeningSocket(serverPortNum);
     if (!serverSocket){
         fprintf(stderr, "Server Terminating, unable to listen on specified port\n");
         return 1;
@@ -174,8 +201,12 @@ int main(int argc, char const *argv[]) {
     ///// INVARIANT
     ///// serverSocket is listening for incoming connections on requested port
 
+    const size_t NAME_BUFF_LENGTH = 256;
+    char* serverName = malloc(NAME_BUFF_LENGTH);
+    gethostname(serverName, NAME_BUFF_LENGTH);
     printf("Awaiting incoming client connections,  connect via client program:\n");
-    printf("python ftclient.py %s <COMMAND> [<FILENAME>] <DATA_PORT>\n", serverInfo.ai_canonname);
+    printf("python ftclient.py %s %s <COMMAND> [<FILENAME>] <DATA_PORT>\n", serverName, serverPortSt);
+
 
     struct sockaddr_storage clientAddr;
     socklen_t addrSize = sizeof clientAddr;
