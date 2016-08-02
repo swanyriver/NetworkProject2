@@ -1,4 +1,4 @@
-CFLAGS = -std=gnu99
+CFLAGS = -Wall -std=gnu99
 
 all: ftserver
 

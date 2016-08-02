@@ -21,8 +21,10 @@ const int HANDLE_LIMIT = 10;
 const int PRIVILEGED = 1024;
 const int MAX_PORT = 65536;
 const int GET_ADDR_NO_ERROR = 0;
+const int BIND_SUCCESS = 0;
 const int CONNECT_ERROR = -1;
 const int EXPECTED_ARGS = 1;
+const int POOL_SIZE = 5;
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 
@@ -34,6 +36,111 @@ void error_exit(char* message){
         fprintf(stderr, "%s\n",error);
     }
     exit(1);
+}
+
+int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
+    // set up hints struct and other socket initialization referenced from Beej's guide and linux manual examples
+    // http://beej.us/guide/bgnet/output/html/multipage/clientserver.html
+    // http://man7.org/linux/man-pages/man3/getaddrinfo.3.html
+
+    // set up structs for requesting ip address from hostname
+    struct addrinfo hints, *servinfo;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    int getadderResult = getaddrinfo(remoteHostName, remotePortSt, &hints, &servinfo);
+    if (getadderResult != GET_ADDR_NO_ERROR){
+        fprintf(stderr, "getaddrinfo call failed with error: %s\n", gai_strerror(getadderResult));
+        return 0;
+    }
+
+    // create socket file descriptor
+    //int s = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
+
+    int s = 0;
+    for (struct addrinfo *rp = servinfo; rp != NULL; rp = rp->ai_next) {
+        // create file descriptor
+        // dprintf(3, "attempting to connect to server on using addrinfo struct at:%p\n", rp);
+        s = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (s == -1){
+            // dprintf(3, "%s\n","failed to get socket file descriptor");
+            continue;
+        }
+
+        // connect socket to server
+        if (connect(s, rp->ai_addr, rp->ai_addrlen) != CONNECT_ERROR){
+            // dprintf(3, "%s\n", "socket connected to server");
+            break;
+        }
+        close(s);
+    }
+    // free up memory used by addr-struct-linked-list
+    freeaddrinfo(servinfo);
+
+
+    // ensure that fd is a valid socket, and not a closed socket ln:57
+    struct stat statbuf;
+    fstat(s, &statbuf);
+    if (!S_ISSOCK(statbuf.st_mode)){
+        s = 0;
+    }
+
+    return s;
+}
+
+//precondition serverPort is a string representin a valid non-reserved port number
+//postcondition, returns file descriptor int of bound and listening socket
+int getListeningSocket(const char* serverPort, struct addrinfo* serverAddr){
+    // set up hints struct and other socket initialization referenced from Beej's guide and linux manual examples
+    // http://beej.us/guide/bgnet/output/html/multipage/clientserver.html
+    // http://man7.org/linux/man-pages/man3/getaddrinfo.3.html
+
+    // set up structs for requesting ip address from hostname
+    struct addrinfo hints, *servinfo;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    int getadderResult = getaddrinfo(NULL, serverPort, &hints, &servinfo);
+    if (getadderResult != GET_ADDR_NO_ERROR){
+        fprintf(stderr, "getaddrinfo call failed with error: %s\n", gai_strerror(getadderResult));
+        return 0;
+    }
+
+    int s = 0;
+    for (struct addrinfo *rp = servinfo; rp != NULL; rp = rp->ai_next) {
+        // create file descriptor
+        // dprintf(3, "attempting to connect to server on using addrinfo struct at:%p\n", rp);
+        s = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (s == -1){
+            continue;
+        }
+
+        // connect socket to server
+        if (bind(s, rp->ai_addr, rp->ai_addrlen) == BIND_SUCCESS){
+            printf("bound on: %s %s %d\n", rp->ai_canonname,rp->ai_addr->sa_data, s);
+            *serverAddr = *rp;
+            break;
+        }
+        close(s);
+    }
+    // free up memory used by addr-struct-linked-list
+    freeaddrinfo(servinfo);
+
+
+    // ensure that fd is a valid socket, and not a closed socket
+    struct stat statbuf;
+    fstat(s, &statbuf);
+    if (!S_ISSOCK(statbuf.st_mode)){
+        fprintf(stderr, "Unable to bind a socket to supplied port");
+        return 0;
+    }
+
+    listen(s, POOL_SIZE * 2);
+
+
+    return s;
 }
 
 
@@ -54,6 +161,33 @@ int main(int argc, char const *argv[]) {
         return 1;
     }
 
+    ///// INVARIANT
+    ///// server launched with valid port number
+
+    struct addrinfo serverInfo;
+    int serverSocket = getListeningSocket(serverPortSt, &serverInfo);
+    if (!serverSocket){
+        fprintf(stderr, "Server Terminating, unable to listen on specified port\n");
+        return 1;
+    }
+
+    ///// INVARIANT
+    ///// serverSocket is listening for incoming connections on requested port
+
+    printf("Awaiting incoming client connections,  connect via client program:\n");
+    printf("python ftclient.py %s <COMMAND> [<FILENAME>] <DATA_PORT>\n", serverInfo.ai_canonname);
+
+    struct sockaddr_storage clientAddr;
+    socklen_t addrSize = sizeof clientAddr;
+    int connectedSocket = accept(serverSocket, (struct sockaddr *) &clientAddr, &addrSize);
+
+
+    char* msg = "hello there client";
+    send(connectedSocket, msg, strlen(msg), 0);
+
+    shutdown(connectedSocket, 2);
+    close(connectedSocket);
+    close(serverSocket);
 
 }
 
