@@ -24,7 +24,8 @@ const int GET_ADDR_NO_ERROR = 0;
 const int BIND_SUCCESS = 0;
 const int CONNECT_ERROR = -1;
 const int EXPECTED_ARGS = 1;
-const int POOL_SIZE = 5;
+const int ACTION_LIST = 100;
+const int ACTION_GET = 200;
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 
@@ -76,7 +77,7 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     int getadderResult = getaddrinfo(remoteHostName, remotePortSt, &hints, &servinfo);
     if (getadderResult != GET_ADDR_NO_ERROR){
         fprintf(stderr, "getaddrinfo call failed with error: %s\n", gai_strerror(getadderResult));
-        return 0;
+        return CONNECT_ERROR;
     }
 
     // create socket file descriptor
@@ -107,7 +108,7 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     struct stat statbuf;
     fstat(s, &statbuf);
     if (!S_ISSOCK(statbuf.st_mode)){
-        s = 0;
+        s = CONNECT_ERROR;
     }
 
     return s;
@@ -203,55 +204,52 @@ int main(int argc, char const *argv[]) {
     printf("python ftclient.py %s %s <COMMAND> [<FILENAME>] <DATA_PORT>\n", serverName, serverPortSt);
 
 
-    //struct sockaddr_storage clientAddrSt;
-    struct sockaddr clientAddr;
-    socklen_t addrSize = sizeof clientAddr;
-    int connectedSocket = accept(serverSocket, &clientAddr, &addrSize);
+    // Accept and processes client connections one at a time until terminated
+    while (1) {
+        int connectedSocket=0;
+        int dataSocket=0;
 
-//    struct sockaddr clientIP;
-//    addrSize = sizeof clientIP;
-//    getpeername(connectedSocket, &clientIP, &addrSize);
-//    printf("server: got connection from %s\n", clientIP.sa_data);
+        struct sockaddr clientAddr;
+        socklen_t addrSize = sizeof clientAddr;
+        connectedSocket = accept(serverSocket, &clientAddr, &addrSize);
 
-    //struct sockaddr clientAddr = clientAddrSt.ss_family == AF_INET ? (((struct sockaddr_in)clientAddrSt).sin_addr)
+        // connected to new client
 
-    //todo get rid of this
-    char* msg = "hello there client";
-    send(connectedSocket, msg, strlen(msg), 0);
+        //todo get rid of this
+        char* msg = "hello there client";
+        send(connectedSocket, msg, strlen(msg), 0);
 
-    //todo get command and dataport from socket
-    char* clientName = 0;
-    char* dataPortString = 0;
-    char* readBuffer = malloc(REC_BUFFER_SIZE);
-    getClientHostNameAndDataPort(connectedSocket, &clientName, &dataPortString, readBuffer);
+        //todo get command and dataport from socket
+        char* clientName = 0;
+        char* dataPortString = 0;
+        char *readBuffer = malloc(REC_BUFFER_SIZE);
+        getClientHostNameAndDataPort(connectedSocket, &clientName, &dataPortString, readBuffer);
 
-    if (!clientName || !dataPortString){
-        fprintf(stderr, "%s\n", "error retrieving data port number from client");
-        return 1;
+        if (!clientName || !dataPortString){
+            fprintf(stderr, "%s\n", "error retrieving data port number from client");
+            return 1;
+        }
+
+        dataSocket = getConnectedSocket(clientName, dataPortString);
+
+        if (dataSocket == CONNECT_ERROR || dataSocket == 0){
+            fprintf(stderr, "failed to create second connection for data\n");
+        } else {
+            printf("data connection establishing with: %s %s\n", clientName, dataPortString);
+
+
+
+            msg = "DATA connection says hello";
+            send(dataSocket, msg, strlen(msg), 0);
+        }
+
+        shutdown(dataSocket, 2);
+        close(dataSocket);
+        shutdown(connectedSocket, 2);
+        close(connectedSocket);
+
+        free(readBuffer);
     }
-
-    printf("data connection: %s %s\n", clientName, dataPortString);
-    int dataSocket = getConnectedSocket(clientName, dataPortString);
-
-    if (dataSocket == CONNECT_ERROR){
-        fprintf(stderr, "failed to create second connection for data\n");
-    } else {
-        printf("connect to client, fd=%d\n", dataSocket);
-        struct sockaddr_in peer;
-        getpeername(dataSocket, (struct sockaddr *) &peer, (socklen_t *) sizeof peer);
-        //printf("%s\n", peer.sin_addr.s_addr);
-    }
-
-    msg = "DATA connection says hello";
-    send(dataSocket, msg, strlen(msg), 0);
-
-
-    shutdown(connectedSocket, 2);
-    close(connectedSocket);
-    shutdown(dataSocket, 2);
-    close(dataSocket);
-    close(serverSocket);
-    free(readBuffer);
 
 }
 
