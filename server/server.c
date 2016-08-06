@@ -211,6 +211,26 @@ void connectionCleanUp(int dataSocket, int controlSocket, char* readBuffer){
 }
 
 
+int sendDirList(int dataSocket) {
+    //todo implement sending dir list
+    char* msg = "here is a list for you";
+    send(dataSocket, msg, strlen(msg), 0);
+    return 1;
+}
+
+
+int sendFile(int dataSocket, char* fileName) {
+    //todo implement sending file
+
+    printf("%s {%s}\n", "sending file to connected client", fileName);
+
+    char* msg = "Im gonna send you that file\nDont you worry about it\nIts gonna get sent\n";
+    send(dataSocket, msg, strlen(msg), 0);
+
+    return 1;
+}
+
+
 int main(int argc, char const *argv[]) {
     ////////////////////////////////////////////////////////////////////////
     ///////////CHECK NUMBER OF ARGS AND VALID PORT NUMBER //////////////////
@@ -258,8 +278,7 @@ int main(int argc, char const *argv[]) {
 
         // connected to new client
 
-        //todo get rid of this
-        char* msg = "Connected to FTP Server";
+        char* msg = "FTP-SERVER: You are connected to FTP Server";
         send(connectedSocket, msg, strlen(msg), 0);
 
         //todo get command and dataport from socket
@@ -290,7 +309,7 @@ int main(int argc, char const *argv[]) {
         int requestedAction = getRequestedAction(connectedSocket, readBuffer, &filename);
 
         if (!requestedAction || (requestedAction == ACTION_GET && !filename)){
-            char* errorMessage = "Request must take form of:  -g <filename>  ||  -l";
+            char* errorMessage = "FTP-SERVER: Request must take form of:  -g <filename>  ||  -l";
             send(connectedSocket, errorMessage, strlen(errorMessage), 0);
             connectionCleanUp(dataSocket, connectedSocket, readBuffer);
             continue;
@@ -299,13 +318,19 @@ int main(int argc, char const *argv[]) {
         ///// INVARIANT
         ///// client has requested an available action
         if (requestedAction == ACTION_LIST) {
-
-            msg = "here is a list for you";
-            send(dataSocket, msg, strlen(msg), 0);
-
+            int success = sendDirList(dataSocket);
+            if (!success) {
+                msg = "FTP-SERVER: There was a server error when attempting to send directory contents";
+                send(connectedSocket, msg, strlen(msg), 0);
+            }
         } else if (requestedAction == ACTION_GET) {
-            msg = "oh your gonna get it,  you will GET IT";
-            send(dataSocket, msg, strlen(msg), 0);
+            int success = sendFile(dataSocket, filename);
+            if (success){
+                msg = "FTP-SERVER: file transfer completed successfully";
+            } else {
+                msg = "FTP-SERVER: There was a server error when attempting to send the file";
+            }
+            send(connectedSocket, msg, strlen(msg), 0);
         }
 
         connectionCleanUp(dataSocket, connectedSocket, readBuffer);

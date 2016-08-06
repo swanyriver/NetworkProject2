@@ -18,6 +18,9 @@ PRIVILEGED = 1024
 MAX_PORT = 65536
 EXPECTED_ARGS = 4
 
+ACTION_GET = "-g"
+ACTION_LIST = "-l"
+
 
 def nextPort(portNum):
     portNum += 1
@@ -48,33 +51,53 @@ def getListeningSocket(portNum):
     return serverSocket, portNum
 
 
-def getDirContents(sock):
+def getDirContents(dataConnection):
     """
     :type sock: socket.socket
     :return:
     """
-    dataConnection, address = sock.accept()
     print dataConnection.recv(REC_BUFFER)
 
 
-def getFile(sock):
+def getFile(dataConnection, fileName):
     """
     :type sock: socket.socket
     :return:
     """
-    dataConnection, address = sock.accept()
+
+    #todo check if file already exists,  open (#) instead
+
+    #todo read as byte array and write as binary
+
+    outputFile = open(fileName, "w")
+
+    try:
+        while True:
+            bytes = dataConnection.recv(REC_BUFFER)
+            if not len(bytes):
+                break
+            outputFile.write(bytes)
+
+
+    except (socket.error, IOError) as e:
+        print "Error reading from socket or writing to file"
+        print e
+
+    finally:
+        outputFile.close()
 
 
 
-def client_main(serverName, serverPort, dataPort, command):
+
+
+def client_main(serverName, serverPort, dataPort, action, filename):
     #print "HOST:%s PORT:%d"%(TCP_IP, TCP_PORT)
 
     # create socket and connect to server specified in command line
     controlSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     controlSocket.connect((serverName, serverPort))
     #for debug
-    print "peerName:", controlSocket.getpeername()
-    #s.settimeout(.2)
+    #print "peerName:", controlSocket.getpeername()
 
     print controlSocket.recv(REC_BUFFER)
 
@@ -87,19 +110,29 @@ def client_main(serverName, serverPort, dataPort, command):
     dataConnection, address = dataSocket.accept()
     #print "connected to ", address
 
-    controlSocket.send(command)
+    if action == ACTION_GET:
+        controlSocket.send(action + " " + filename)
+        getFile(dataConnection, filename)
+    elif action == ACTION_LIST:
+        controlSocket.send(action)
+        getDirContents(dataConnection)
 
-    #todo call either write to file or display list
-    print dataConnection.recv(REC_BUFFER)
+    # receive and display status message from server
+    while True:
+        msg = controlSocket.recv(REC_BUFFER)
+        if not msg:
+            break
+        print msg
 
+    # disconnect from server
     dataSocket.close()
+    dataConnection.close()
     controlSocket.close()
     print "Connection with server closed"
 
 
 if __name__ == "__main__":
 
-    # todo should be at least 4
     if len(sys.argv) < EXPECTED_ARGS + 1:
         print "must supply server name/ip port, requested action, data port number"
         print "examples:"
@@ -120,11 +153,18 @@ if __name__ == "__main__":
         sys.exit(1)
 
 
-    #todo check that actions match -l or -g
+    # ensure that actions match -l or -g
+    if (sys.argv[3] != ACTION_LIST and sys.argv[3] != ACTION_GET)\
+            or sys.argv[3] == ACTION_GET and len(sys.argv) < EXPECTED_ARGS + 2:
+        print "Action must be list (-l) or get (-g <filename>)"
+        sys.exit(1)
+
+
 
     client_main(
         serverName=sys.argv[1],
         serverPort=serverPort,
         dataPort=dataPort,
-        command=" ".join(sys.argv[3:-1])
+        action=sys.argv[3],
+        filename=sys.argv[4]
     )
