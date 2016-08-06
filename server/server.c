@@ -24,6 +24,7 @@ const int GET_ADDR_NO_ERROR = 0;
 const int BIND_SUCCESS = 0;
 const int CONNECT_ERROR = -1;
 const int EXPECTED_ARGS = 1;
+const int POOL_SIZE = 5;
 const int ACTION_LIST = 100;
 const int ACTION_GET = 200;
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -167,6 +168,48 @@ void getClientHostNameAndDataPort(int conSock, char** hostName, char** portStrin
 
 }
 
+int getRequestedAction(int controlSocket, char* readBuffer, char** filename){
+    ssize_t bytesRead = recv(controlSocket, readBuffer, REC_BUFFER_SIZE, 0);
+
+    if (bytesRead == 0){
+        return 0;
+    }
+
+    readBuffer[bytesRead] = 0;
+
+    if (readBuffer[0] == '-' && readBuffer[1] == 'l'){
+        printf("%s\n","Client requested directory list");
+        return ACTION_LIST;
+    }
+
+    if (readBuffer[0] == '-' && readBuffer[1] == 'g' && readBuffer[2] == ' '){
+        *filename = &readBuffer[3];
+        printf("%s {%s}\n","Client requested to get file ", *filename);
+        return ACTION_GET;
+    }
+
+    fprintf(stderr, "Request from client badly formed   {%s} \n", readBuffer);
+    return 0;
+}
+
+void connectionCleanUp(int dataSocket, int controlSocket, char* readBuffer){
+    if (dataSocket){
+        shutdown(dataSocket, 2);
+        close(dataSocket);
+    }
+
+    if (controlSocket){
+        shutdown(controlSocket, 2);
+        close(controlSocket);
+    }
+
+    if (readBuffer){
+        free(readBuffer);
+    }
+
+    printf("%s\n","Connection with client closed");
+}
+
 
 int main(int argc, char const *argv[]) {
     ////////////////////////////////////////////////////////////////////////
@@ -216,7 +259,7 @@ int main(int argc, char const *argv[]) {
         // connected to new client
 
         //todo get rid of this
-        char* msg = "hello there client";
+        char* msg = "Connected to FTP Server";
         send(connectedSocket, msg, strlen(msg), 0);
 
         //todo get command and dataport from socket
@@ -227,28 +270,46 @@ int main(int argc, char const *argv[]) {
 
         if (!clientName || !dataPortString){
             fprintf(stderr, "%s\n", "error retrieving data port number from client");
-            return 1;
+            connectionCleanUp(dataSocket, connectedSocket, readBuffer);
+            continue;
         }
 
         dataSocket = getConnectedSocket(clientName, dataPortString);
 
         if (dataSocket == CONNECT_ERROR || dataSocket == 0){
             fprintf(stderr, "failed to create second connection for data\n");
-        } else {
-            printf("data connection establishing with: %s %s\n", clientName, dataPortString);
+            connectionCleanUp(dataSocket, connectedSocket, readBuffer);
+            continue;
+        }
 
+        ///// INVARIANT
+        ///// control and data connection established client
+        printf("data connection established with: %s %s\n", clientName, dataPortString);
 
+        char* filename = NULL;
+        int requestedAction = getRequestedAction(connectedSocket, readBuffer, &filename);
 
-            msg = "DATA connection says hello";
+        if (!requestedAction || (requestedAction == ACTION_GET && !filename)){
+            char* errorMessage = "Request must take form of:  -g <filename>  ||  -l";
+            send(connectedSocket, errorMessage, strlen(errorMessage), 0);
+            connectionCleanUp(dataSocket, connectedSocket, readBuffer);
+            continue;
+        }
+
+        ///// INVARIANT
+        ///// client has requested an available action
+        if (requestedAction == ACTION_LIST) {
+
+            msg = "here is a list for you";
+            send(dataSocket, msg, strlen(msg), 0);
+
+        } else if (requestedAction == ACTION_GET) {
+            msg = "oh your gonna get it,  you will GET IT";
             send(dataSocket, msg, strlen(msg), 0);
         }
 
-        shutdown(dataSocket, 2);
-        close(dataSocket);
-        shutdown(connectedSocket, 2);
-        close(connectedSocket);
+        connectionCleanUp(dataSocket, connectedSocket, readBuffer);
 
-        free(readBuffer);
     }
 
 }

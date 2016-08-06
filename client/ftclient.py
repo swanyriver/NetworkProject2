@@ -10,14 +10,13 @@
 
 import sys
 import socket
-from multiprocessing import process
 
 REC_BUFFER = 512
 MSG_LIMIT = 500
 MIN_PORT = 0
 PRIVILEGED = 1024
 MAX_PORT = 65536
-EXPECTED_ARGS = 2
+EXPECTED_ARGS = 4
 
 
 def nextPort(portNum):
@@ -34,7 +33,7 @@ def getListeningSocket(portNum):
             # binding to port was successful exit loop
             break
         except socket.error as e:
-            # for convenience of testing on flip server with congestion ports, advance consecutively
+            # for convenience of testing on flip server with congested ports, advance consecutively
             if e.errno == 98 or e.errno == 13:
                 candidate = nextPort(portNum)
                 print "Port # %d is %s"%(portNum, ("unavailable" if e.errno == 98 else "privileged")),
@@ -46,7 +45,7 @@ def getListeningSocket(portNum):
                     exit()
 
     serverSocket.listen(1)
-    return serverSocket
+    return serverSocket, portNum
 
 
 def getDirContents(sock):
@@ -67,45 +66,65 @@ def getFile(sock):
 
 
 
-def client_main(TCP_IP, TCP_PORT):
+def client_main(serverName, serverPort, dataPort, command):
     #print "HOST:%s PORT:%d"%(TCP_IP, TCP_PORT)
 
     # create socket and connect to server specified in command line
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((TCP_IP, TCP_PORT))
+    controlSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    controlSocket.connect((serverName, serverPort))
     #for debug
-    print "peerName:", s.getpeername()
+    print "peerName:", controlSocket.getpeername()
     #s.settimeout(.2)
 
-    print s.recv(REC_BUFFER)
+    print controlSocket.recv(REC_BUFFER)
 
-    #todo retieve this from commandline
-    dataSocket = getListeningSocket(4444)
-    #todo send port num to server
-    s.send(socket.gethostbyname(socket.gethostname()) + " " + "boogie")
+    # Create a listening socket on supplied data port number
+    dataSocket, dataPort = getListeningSocket(dataPort)
+
+    # Inform server of clients address and data port number
+    controlSocket.send(socket.gethostbyname(socket.gethostname()) + " " + str(dataPort))
 
     dataConnection, address = dataSocket.accept()
-    print "connected to ", address
+    #print "connected to ", address
+
+    controlSocket.send(command)
+
+    #todo call either write to file or display list
     print dataConnection.recv(REC_BUFFER)
 
     dataSocket.close()
-    s.close()
+    controlSocket.close()
     print "Connection with server closed"
 
 
 if __name__ == "__main__":
 
     # todo should be at least 4
-    if len(sys.argv) <= EXPECTED_ARGS:
-        print "must supply host and port number"
+    if len(sys.argv) < EXPECTED_ARGS + 1:
+        print "must supply server name/ip port, requested action, data port number"
+        print "examples:"
+        print "python ftclient.py flip1 9999 -l 8888"
+        print "python ftclient.py flip1 9999 -g smallFile.txt 8888"
+
         sys.exit(1)
 
-    port = None
+    serverPort = None
+    dataPort = None
     try:
-        port = int(sys.argv[2])
-        if not PRIVILEGED < port < MAX_PORT: raise ValueError("Out of range")
+        serverPort = int(sys.argv[2])
+        if not PRIVILEGED < serverPort < MAX_PORT: raise ValueError("Out of range")
+        dataPort = int(sys.argv[-1])
+        if not PRIVILEGED < dataPort < MAX_PORT: raise ValueError("Out of range")
     except ValueError:
-        print "Invalid port supplied"
+        print "Invalid port numbers supplied"
         sys.exit(1)
 
-    client_main(sys.argv[1], port)
+
+    #todo check that actions match -l or -g
+
+    client_main(
+        serverName=sys.argv[1],
+        serverPort=serverPort,
+        dataPort=dataPort,
+        command=" ".join(sys.argv[3:-1])
+    )
