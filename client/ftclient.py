@@ -56,7 +56,10 @@ def getDirContents(dataConnection):
     :type sock: socket.socket
     :return:
     """
-    print dataConnection.recv(REC_BUFFER)
+    print "\nFTP Directory contents:"
+    print "-----------------------"
+    print "\n".join(dataConnection.recv(REC_BUFFER).split())
+    print ""
 
 
 def getFile(dataConnection, fileName):
@@ -91,13 +94,10 @@ def getFile(dataConnection, fileName):
 
 
 def client_main(serverName, serverPort, dataPort, action, filename):
-    #print "HOST:%s PORT:%d"%(TCP_IP, TCP_PORT)
 
     # create socket and connect to server specified in command line
     controlSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     controlSocket.connect((serverName, serverPort))
-    #for debug
-    #print "peerName:", controlSocket.getpeername()
 
     print controlSocket.recv(REC_BUFFER)
 
@@ -108,7 +108,6 @@ def client_main(serverName, serverPort, dataPort, action, filename):
     controlSocket.send(socket.gethostbyname(socket.gethostname()) + " " + str(dataPort))
 
     dataConnection, address = dataSocket.accept()
-    #print "connected to ", address
 
     if action == ACTION_GET:
         controlSocket.send(action + " " + filename)

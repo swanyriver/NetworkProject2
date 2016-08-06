@@ -190,9 +190,42 @@ void connectionCleanUp(int dataSocket, int controlSocket, char* readBuffer){
 
 
 int sendDirList(int dataSocket) {
-    //todo implement sending dir list
-    char* msg = "here is a list for you";
+
+    char* dirString = malloc(REC_BUFFER_SIZE);
+    char* writeCursor = dirString;
+    *dirString = 0;
+    size_t remainingBytes = REC_BUFFER_SIZE;
+
+    DIR *d;
+    struct dirent *dir;
+    d = opendir(".");
+
+    if (!d) {
+        return 0;
+    }
+
+    while (remainingBytes && (dir = readdir(d)) != NULL)
+    {
+        if (dir->d_type != DT_REG){
+            continue;
+        }
+        size_t nameLength = strlen(dir->d_name);
+        strncpy(writeCursor, dir->d_name, MIN(nameLength, remainingBytes));
+        *(writeCursor + nameLength) = ' ';
+        writeCursor += nameLength + 1;
+        remainingBytes -= nameLength + 1;
+    }
+
+    *writeCursor = 0;
+
+    closedir(d);
+
+    char* msg = strlen(dirString) ? dirString : "FTP-SERVER: Server Directory is Empty";
+
+    //Send directy listing to client
     send(dataSocket, msg, strlen(msg), 0);
+
+    free(dirString);
     return 1;
 }
 
