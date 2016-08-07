@@ -27,6 +27,8 @@ const int EXPECTED_ARGS = 1;
 const int POOL_SIZE = 5;
 const int ACTION_LIST = 100;
 const int ACTION_GET = 200;
+const int FILE_NOT_FOUND = -1;
+int FILE_TRANSFER_SUCCESS = 1;
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 
@@ -231,6 +233,9 @@ int sendDirList(int dataSocket) {
 int sendFile(int dataSocket, char* fileName) {
     //todo implement sending file
 
+//    printf("file not found\n");
+//    return FILE_NOT_FOUND;
+
     printf("%s {%s}\n", "sending file to connected client", fileName);
 
     char* msg = "Im gonna send you that file\nDont you worry about it\nIts gonna get sent\n";
@@ -239,7 +244,7 @@ int sendFile(int dataSocket, char* fileName) {
     msg = "OK, Here is some more of it for you,  I hope you are liking it\n";
     send(dataSocket, msg, strlen(msg), 0);
 
-    return 1;
+    return FILE_TRANSFER_SUCCESS;
 }
 
 
@@ -336,9 +341,11 @@ int main(int argc, char const *argv[]) {
                 send(connectedSocket, msg, strlen(msg), 0);
             }
         } else if (requestedAction == ACTION_GET) {
-            int success = sendFile(dataSocket, filename);
-            if (success){
+            int status = sendFile(dataSocket, filename);
+            if (status == FILE_TRANSFER_SUCCESS){
                 msg = "FTP-SERVER: file transfer completed successfully";
+            } else if (status == FILE_NOT_FOUND) {
+                msg = "FTP-SERVER: requested file not found on server";
             } else {
                 msg = "FTP-SERVER: There was a server error when attempting to send the file";
             }

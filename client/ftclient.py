@@ -69,7 +69,7 @@ def resolveNameConflict(fileName, filesInDir):
 
     while fileName in filesInDir:
         index += 1
-        fileName = "%s(%d)%s" % (prefix, index, suffix)
+        fileName = "%s-%d%s" % (prefix, index, suffix)
 
     return fileName
 
@@ -88,22 +88,27 @@ def getFile(dataConnection, fileName):
 
     #todo read as byte array and write as binary
 
-    outputFile = open(fileName, "w")
+
+    outputFile = None
 
     try:
-        while True:
-            bytes = dataConnection.recv(REC_BUFFER)
-            if not len(bytes):
-                break
-            outputFile.write(bytes)
+        bytes = dataConnection.recv(REC_BUFFER)
+        # wait to create file until at least first group of bytes received
+        # avoid creating empty files on File-not-found error
+        if bytes:
+            outputFile = open(fileName, "w")
 
+        while bytes:
+            outputFile.write(bytes)
+            bytes = dataConnection.recv(REC_BUFFER)
 
     except (socket.error, IOError) as e:
         print "Error reading from socket or writing to file"
         print e
 
     finally:
-        outputFile.close()
+        if outputFile:
+            outputFile.close()
 
 
 
