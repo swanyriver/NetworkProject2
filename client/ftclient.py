@@ -21,12 +21,17 @@ EXPECTED_ARGS = 4
 ACTION_GET = "-g"
 ACTION_LIST = "-l"
 
-
+####
+# Utility method for advancing to next possible port number
+###
 def nextPort(portNum):
     portNum += 1
     return portNum if PRIVILEGED < portNum <= MAX_PORT else PRIVILEGED
 
-
+###
+# returns a new socket that has bound() and listen() on requested portNum
+# returned port is ready to accept() incoming connections
+###
 def getListeningSocket(portNum):
     serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     while True:
@@ -49,18 +54,23 @@ def getListeningSocket(portNum):
     serverSocket.listen(1)
     return serverSocket, portNum
 
-
+###
+# retrieve and display ftp server directory contents over dataConnection socket
+# pre-conditions:  dataConnection is connected to FTP server
+#                  -l request has been sent over control connection
+###
 def getDirContents(dataConnection):
-    """
-    :type sock: socket.socket
-    :return:
-    """
     print "\nFTP Directory contents:"
     print "-----------------------"
     print "\n".join(dataConnection.recv(REC_BUFFER).split())
     print ""
 
 
+###
+# will resolve a file name conflict by appending -# to filename
+# if directory contains filename.txt returns filename-1.txt
+# if directory contains [filename.txt, filename-1.txt] returns filename-2.txt
+###
 def resolveNameConflict(fileName, filesInDir):
     index = 0
     parts = fileName.split(".")
@@ -73,6 +83,11 @@ def resolveNameConflict(fileName, filesInDir):
     return fileName
 
 
+###
+# retrieve and save a file from ftp server over dataConnection socket
+# pre-conditions:  dataConnection is connected to FTP server
+#                   -g <filename> request has been sent over control connection
+###
 def getFile(dataConnection, fileName):
     """
     :type sock: socket.socket
@@ -108,6 +123,17 @@ def getFile(dataConnection, fileName):
             outputFile.close()
 
 
+### FTP CLIENT ROUTINE ###
+# accepts command line arguments as parameters so that other scripts can import and use this function with other params
+#
+### SEQUENCE OF EVENTS ###
+# connects to ftp server
+# transmits local-address and dataport number over control connection
+# accepts data connection from server
+# transmits request -l | -g <filename> on control connection
+# receives file or directory contents on data connection
+# closes connections and exits
+###
 def client_main(serverName, serverPort, dataPort, action, filename):
 
     # create socket and connect to server specified in command line
@@ -149,6 +175,11 @@ def client_main(serverName, serverPort, dataPort, action, filename):
     print "Connection with server closed"
 
 
+###
+# parse command arguments from launched ftclient.py
+# detect errors in number and format of arguments
+# forward verified parameters to main() function
+###
 if __name__ == "__main__":
 
     if len(sys.argv) < EXPECTED_ARGS + 1:

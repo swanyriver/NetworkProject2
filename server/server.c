@@ -32,7 +32,12 @@ int FILE_TRANSFER_SUCCESS = 1;
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 
-//print message, and if available perror messege, exit in failure
+/**
+ * prints received message, and if available perror message
+ * exits program and indicates failure
+ * Used to halt program from unrecoverable errors that occur within a function
+ *
+ */
 void error_exit(char* message){
     fprintf(stderr,"%s\n",message);
     if(errno){
@@ -42,6 +47,12 @@ void error_exit(char* message){
     exit(1);
 }
 
+/**
+ * Returns a socket that is connected to remoteHostName on int(remotePortSt) and ready for rec/send
+ * pre-conditions: remoteHostName is reachable IP-address or name
+ *                 remotePortSt is numeric string representing valid port number
+ *
+ */
 int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     // set up hints struct and other socket initialization referenced from Beej's guide and linux manual examples
     // http://beej.us/guide/bgnet/output/html/multipage/clientserver.html
@@ -53,29 +64,25 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
+    // Use hints and getaddrinfo to construct addrinfo struct linked-list
     int getadderResult = getaddrinfo(remoteHostName, remotePortSt, &hints, &servinfo);
     if (getadderResult != GET_ADDR_NO_ERROR){
         fprintf(stderr, "getaddrinfo call failed with error: %s\n", gai_strerror(getadderResult));
         return CONNECT_ERROR;
     }
 
-    // create socket file descriptor
-    //int s = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
-
+    // Attempt to connect using addrinfo structs returned by getaddrinfo
     int s = 0;
     struct addrinfo *rp;
     for (rp = servinfo; rp != NULL; rp = rp->ai_next) {
         // create file descriptor
-        // dprintf(3, "attempting to connect to server on using addrinfo struct at:%p\n", rp);
         s = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
         if (s == -1){
-            // dprintf(3, "%s\n","failed to get socket file descriptor");
             continue;
         }
 
         // connect socket to server
         if (connect(s, rp->ai_addr, rp->ai_addrlen) != CONNECT_ERROR){
-            // dprintf(3, "%s\n", "socket connected to server");
             break;
         }
         close(s);
@@ -84,7 +91,7 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     freeaddrinfo(servinfo);
 
 
-    // ensure that fd is a valid socket, and not a closed socket ln:57
+    // ensure that fd is a valid socket, and not a closed socket ln:88
     struct stat statbuf;
     fstat(s, &statbuf);
     if (!S_ISSOCK(statbuf.st_mode)){
@@ -94,10 +101,11 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     return s;
 }
 
-//precondition serverPort is a string representin a valid non-reserved port number
-//postcondition, returns file descriptor int of bound and listening socket
+/**
+ * Returns a socket that is bound and listening on portNum,  ready to accept() incoming connections
+ */
 int getListeningSocket(int portNum) {
-    // Creating a listening socket taken from my previous classwork
+    // Creating a listening socket taken from my own previous classwork
     // https://github.com/swanyriver/OS-program-4/blob/master/otp_crypt_d.c
     int socketFD;
     struct sockaddr_in serv_addr;
@@ -126,6 +134,15 @@ int getListeningSocket(int portNum) {
     return socketFD;
 }
 
+/**
+ * Reads from control connection the hostname and data port number to be used for the Data-Connection
+ * pre-conditions:  conSock is a connected socket (control connection)
+ *                  readBuffer is an allocated memory space of at least REC_BUFFER_SIZE
+ * post-conditions: *hostname contains the clients hostname or ip address
+ *                  *portString contains the string representation of the data connection port number
+ *
+ * on failure *hostName and/or *portString are left unmodified
+ */
 void getClientHostNameAndDataPort(int conSock, char** hostName, char** portString, char* readBuffer){
     ssize_t bytesRead = recv(conSock, readBuffer, REC_BUFFER_SIZE, 0);
 
@@ -133,9 +150,11 @@ void getClientHostNameAndDataPort(int conSock, char** hostName, char** portStrin
         return;
     }
 
+    //add null terminator to received string
     *hostName = readBuffer;
     *(readBuffer + bytesRead) = 0;
 
+    //Divide string into hostname and portnumber by placing null terminator in space and setting portString to next char
     char* cursor;
     for(cursor = readBuffer; cursor - readBuffer < bytesRead - 1; ++cursor){
         if (*cursor == ' '){
@@ -144,10 +163,15 @@ void getClientHostNameAndDataPort(int conSock, char** hostName, char** portStrin
             break;
         }
     }
-
-
 }
 
+/**
+ * read requested action from control socket connection and retrieve filename if appropriate
+ * returns 0 on failure or appropriate ACTION_* constant on successful parse of requested action.
+ * pre-conditions:  conSock is a connected socket (control connection)
+ *                  readBuffer is an allocated memory space of at least REC_BUFFER_SIZE
+ *
+ */
 int getRequestedAction(int controlSocket, char* readBuffer, char** filename){
     ssize_t bytesRead = recv(controlSocket, readBuffer, REC_BUFFER_SIZE, 0);
 
@@ -172,6 +196,11 @@ int getRequestedAction(int controlSocket, char* readBuffer, char** filename){
     return 0;
 }
 
+/**
+ * Close connected sockets and free memory used for read-buffer
+ * Called at any point during processing client request, will close or free whatever resources have already been used
+ * Called when request has failed, or at completion of clients request.
+ */
 void connectionCleanUp(int dataSocket, int controlSocket, char* readBuffer){
     if (dataSocket){
         shutdown(dataSocket, 2);
@@ -191,6 +220,12 @@ void connectionCleanUp(int dataSocket, int controlSocket, char* readBuffer){
 }
 
 
+/**
+ * Reads directory contents and sends a space separated list of all regular files to connected client over data socket
+ * pre-conditions:  dataSocket is connected to client
+ *
+ * returns 1 on success 0 on failure
+ */
 int sendDirList(int dataSocket) {
 
     char* dirString = malloc(REC_BUFFER_SIZE);
@@ -231,7 +266,15 @@ int sendDirList(int dataSocket) {
     return 1;
 }
 
-
+/**
+ * Opens a file (binary or ascii) and transmits the contents to connected client on dataSocket
+ * pre-conditions:  dataSocket is connected to client
+ *
+ * Return Values:
+ * FILE_NOT_FOUND - file was not able to opened or file does not exist in server directory
+ * ERROR_DURING_READ - fread resulted in ferror() or returned 0 before reaching EOF
+ * FILE_TRANSFER_SUCCESS: all of the bytes in the file were sent to the client
+ */
 int sendFile(int dataSocket, const char* fileName) {
 
     FILE *filePointer = fopen(fileName, "rb");
@@ -257,18 +300,22 @@ int sendFile(int dataSocket, const char* fileName) {
 }
 
 
+/*
+ * Main server process
+ *
+ * returns 1 on socket set up failure
+ * otherwise runs and accepts concurrent incoming connections until killed by supervisor
+ */
 int main(int argc, char const *argv[]) {
-    ////////////////////////////////////////////////////////////////////////
-    ///////////CHECK NUMBER OF ARGS AND VALID PORT NUMBER //////////////////
-    ////////////////////////////////////////////////////////////////////////
 
+    // CHECK NUMBER OF ARGS AND VALID PORT NUMBER
     if (argc < EXPECTED_ARGS + 1){
         error_exit("Server port number must be specified, example:\n./ftserver 9999");
     }
     const int serverPortNum = atoi(argv[1]);
     const char* serverPortSt = argv[1];
 
-    // assert port range, also errror when non-numeric argument supplied as atoi returns 0 and 0 is privileged
+    // assert port range, also error when non-numeric argument supplied as atoi returns 0 and 0 is privileged
     if (serverPortNum < PRIVILEGED || serverPortNum > MAX_PORT){
         fprintf(stderr, "invalid port number supplied (nummeric between %d-%d required)\n", PRIVILEGED, MAX_PORT);
         return 1;
