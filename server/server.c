@@ -63,7 +63,8 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     //int s = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
 
     int s = 0;
-    for (struct addrinfo *rp = servinfo; rp != NULL; rp = rp->ai_next) {
+    struct addrinfo *rp;
+    for (rp = servinfo; rp != NULL; rp = rp->ai_next) {
         // create file descriptor
         // dprintf(3, "attempting to connect to server on using addrinfo struct at:%p\n", rp);
         s = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
@@ -135,7 +136,8 @@ void getClientHostNameAndDataPort(int conSock, char** hostName, char** portStrin
     *hostName = readBuffer;
     *(readBuffer + bytesRead) = 0;
 
-    for(char* cursor = readBuffer; cursor - readBuffer < bytesRead - 1; ++cursor){
+    char* cursor;
+    for(cursor = readBuffer; cursor - readBuffer < bytesRead - 1; ++cursor){
         if (*cursor == ' '){
             *cursor = 0;
             *portString = cursor+1;
