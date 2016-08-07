@@ -7,7 +7,7 @@
 #  ** Output: Will print status messages from server recieved on control port connection,
 #             files requested with -g option will be added in directory that this script was launched
 #  *********************************************************************/
-
+import os
 import sys
 import socket
 
@@ -62,13 +62,29 @@ def getDirContents(dataConnection):
     print ""
 
 
+def resolveNameConflict(fileName, filesInDir):
+    index = 0
+    parts = fileName.split(".")
+    prefix, suffix = (".".join(parts[:-1]), "." + parts[-1]) if len(parts) > 1 else (fileName, "")
+
+    while fileName in filesInDir:
+        index += 1
+        fileName = "%s(%d)%s" % (prefix, index, suffix)
+
+    return fileName
+
+
 def getFile(dataConnection, fileName):
     """
     :type sock: socket.socket
     :return:
     """
 
-    #todo check if file already exists,  open (#) instead
+    #check if file already exists,  open filename(#).ext instead
+    filesInDir = os.listdir(".")
+    if fileName in filesInDir:
+        fileName = resolveNameConflict(fileName, filesInDir)
+        print "Filename already taken saving file as: %s"%fileName
 
     #todo read as byte array and write as binary
 
