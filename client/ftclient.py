@@ -111,14 +111,15 @@ def getFile(dataConnection, fileName):
             outputFile.close()
 
 
-
-
-
 def client_main(serverName, serverPort, dataPort, action, filename):
 
     # create socket and connect to server specified in command line
-    controlSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    controlSocket.connect((serverName, serverPort))
+    try:
+        controlSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        controlSocket.connect((serverName, serverPort))
+    except socket.error as e:
+        print "Unable to create socket and connect to server: ", e
+        return
 
     print controlSocket.recv(REC_BUFFER)
 
