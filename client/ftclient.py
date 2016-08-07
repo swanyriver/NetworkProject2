@@ -29,7 +29,6 @@ def nextPort(portNum):
 
 def getListeningSocket(portNum):
     serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # todo port avail and permission check (can be coppied from above pretty easily)
     while True:
         try:
             serverSocket.bind((socket.gethostname(), portNum))
@@ -86,11 +85,9 @@ def getFile(dataConnection, fileName):
         fileName = resolveNameConflict(fileName, filesInDir)
         print "Filename already taken saving file as: %s"%fileName
 
-    #todo read as byte array and write as binary
-
-
+    # read bytes from socket until disconnect
+    # properly saves ascii or binary data
     outputFile = None
-
     try:
         bytes = dataConnection.recv(REC_BUFFER)
         # wait to create file until at least first group of bytes received

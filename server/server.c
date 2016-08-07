@@ -231,8 +231,6 @@ int sendDirList(int dataSocket) {
 
 
 int sendFile(int dataSocket, const char* fileName) {
-    //todo implement sending file
-
 
     FILE *filePointer = fopen(fileName, "rb");
 
@@ -307,7 +305,6 @@ int main(int argc, char const *argv[]) {
         char* msg = "FTP-SERVER: You are connected to FTP Server";
         send(connectedSocket, msg, strlen(msg), 0);
 
-        //todo get command and dataport from socket
         char* clientName = 0;
         char* dataPortString = 0;
         char *readBuffer = malloc(REC_BUFFER_SIZE);
