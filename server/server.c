@@ -15,7 +15,6 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <dirent.h>
-#include <stdio.h>
 
 
 const int REC_BUFFER_SIZE = 512;
@@ -27,6 +26,7 @@ const int EXPECTED_ARGS = 1;
 const int POOL_SIZE = 5;
 const int ACTION_LIST = 100;
 const int ACTION_GET = 200;
+const int ERROR_DURING_READ  = -2;
 const int FILE_NOT_FOUND = -1;
 int FILE_TRANSFER_SUCCESS = 1;
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -230,21 +230,30 @@ int sendDirList(int dataSocket) {
 }
 
 
-int sendFile(int dataSocket, char* fileName) {
+int sendFile(int dataSocket, const char* fileName) {
     //todo implement sending file
 
-//    printf("file not found\n");
-//    return FILE_NOT_FOUND;
+
+    FILE *filePointer = fopen(fileName, "rb");
+
+    if (!filePointer){
+        fprintf(stderr, "File not found  {%s}\n", fileName);
+        return FILE_NOT_FOUND;
+    }
 
     printf("%s {%s}\n", "sending file to connected client", fileName);
 
-    char* msg = "Im gonna send you that file\nDont you worry about it\nIts gonna get sent\n";
-    send(dataSocket, msg, strlen(msg), 0);
 
-    msg = "OK, Here is some more of it for you,  I hope you are liking it\n";
-    send(dataSocket, msg, strlen(msg), 0);
+    char* readBuffer = malloc(REC_BUFFER_SIZE);
+    size_t bytesReadFromFile = 0;
+    do {
+        bytesReadFromFile = fread(readBuffer, sizeof(char), REC_BUFFER_SIZE, filePointer);
+        send(dataSocket, readBuffer, bytesReadFromFile, 0);
+    } while (bytesReadFromFile);
 
-    return FILE_TRANSFER_SUCCESS;
+    int status = (ferror(filePointer) || !feof(filePointer))? ERROR_DURING_READ : FILE_TRANSFER_SUCCESS;
+    fclose(filePointer);
+    return status;
 }
 
 
@@ -346,6 +355,8 @@ int main(int argc, char const *argv[]) {
                 msg = "FTP-SERVER: file transfer completed successfully";
             } else if (status == FILE_NOT_FOUND) {
                 msg = "FTP-SERVER: requested file not found on server";
+            } else if (status == ERROR_DURING_READ){
+                msg = "FTP-SERVER: error occurred while reading requested file";
             } else {
                 msg = "FTP-SERVER: There was a server error when attempting to send the file";
             }
