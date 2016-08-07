@@ -19,11 +19,9 @@
 
 
 const int REC_BUFFER_SIZE = 512;
-const int HANDLE_LIMIT = 10;
 const int PRIVILEGED = 1024;
 const int MAX_PORT = 65536;
 const int GET_ADDR_NO_ERROR = 0;
-const int BIND_SUCCESS = 0;
 const int CONNECT_ERROR = -1;
 const int EXPECTED_ARGS = 1;
 const int POOL_SIZE = 5;
@@ -236,6 +234,9 @@ int sendFile(int dataSocket, char* fileName) {
     printf("%s {%s}\n", "sending file to connected client", fileName);
 
     char* msg = "Im gonna send you that file\nDont you worry about it\nIts gonna get sent\n";
+    send(dataSocket, msg, strlen(msg), 0);
+
+    msg = "OK, Here is some more of it for you,  I hope you are liking it\n";
     send(dataSocket, msg, strlen(msg), 0);
 
     return 1;
