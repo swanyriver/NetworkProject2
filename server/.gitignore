@@ -1,5 +1,0 @@
-.idea/
-ftserver
-CMakeLists.txt
-client.c
-otp_crypt_d.c
